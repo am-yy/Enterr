@@ -1,16 +1,18 @@
 from execution.login.constants import LoginStatusCode
 from execution.login.custom_login.custom_login_methods_interfaces import CustomLoginMethodsInterface
 from execution.login.dom_interaction.interfaces.dom_interaction_interface import DomInteractionInterface
-from execution.login.find_form_automatically import XPaths
+from execution.login.find_form_automatically import LoginFormFinder, XPaths
 from utils.exceptions import ScriptExecutionStopped
+from utils.totp import seconds_remaining, totp_code
 
 
 class CustomLoginMethodsDriver(CustomLoginMethodsInterface):
-    def __init__(self, driver: DomInteractionInterface, x_paths: XPaths, username: str, password: str):
+    def __init__(self, driver: DomInteractionInterface, x_paths: XPaths, username: str, password: str, totp_secret: str | None = None):
         self._driver = driver
         self._x_paths = x_paths
         self._username = username
         self._password = password
+        self._totp_secret = totp_secret
 
     def click_submit_button(self, xpath=None):
         if xpath is None:
@@ -43,6 +45,22 @@ class CustomLoginMethodsDriver(CustomLoginMethodsInterface):
             self._driver.fill_text(xpath, self._password)
         except Exception:
             raise ScriptExecutionStopped(LoginStatusCode.PASSWORD_FIELD_NOT_FOUND, f"XPath \"{xpath}\" not found on page.")
+        self._driver.wait(500)
+
+    def fill_totp(self, xpath=None):
+        if not self._totp_secret:
+            raise ScriptExecutionStopped(LoginStatusCode.TEXT_FIELD_NOT_FOUND, "No TOTP secret configured for this website.")
+        if xpath is None:
+            xpath = LoginFormFinder(self._driver).find_totp_field()
+            if xpath is None:
+                raise ScriptExecutionStopped(LoginStatusCode.TEXT_FIELD_NOT_FOUND, "TOTP field not found on page.")
+        # Avoid submitting a code that expires mid-request.
+        if seconds_remaining() < 3:
+            self._driver.wait(3000)
+        try:
+            self._driver.fill_text(xpath, totp_code(self._totp_secret))
+        except Exception:
+            raise ScriptExecutionStopped(LoginStatusCode.TEXT_FIELD_NOT_FOUND, f"XPath \"{xpath}\" not found on page.")
         self._driver.wait(500)
 
     def fill_text(self, xpath, value):

@@ -30,6 +30,16 @@ export function completions(context: CompletionContext) {
         info: 'fillPassword(xpath): Fills password in text field found by xpath.',
       },
       {
+        label: 'fillTotp()',
+        type: 'function',
+        info: 'fillTotp(): Tries to automatically find the one-time-code field and fills the current TOTP code.',
+      },
+      {
+        label: 'fillTotp(\'\')',
+        type: 'function',
+        info: 'fillTotp(xpath): Fills the current TOTP code in text field found by xpath.',
+      },
+      {
         label: 'clickSubmitButton()',
         type: 'function',
         info: 'clickSubmitButton(): Tries to automatically find submit button and clicks it.',

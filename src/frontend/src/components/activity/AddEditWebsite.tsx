@@ -24,6 +24,7 @@ const emptyChangeWebsite: ChangeWebsite = {
   paused: false,
   expiration_interval_minutes: null,
   custom_login_script: null,
+  totp_secret: null,
   action_interval: {
     date_minutes_start: 0,
     date_minutes_end: null,

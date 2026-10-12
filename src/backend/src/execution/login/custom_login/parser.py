@@ -16,6 +16,7 @@ start: stmt*
 stmt: click_submit_button
     | fill_username
     | fill_password
+    | fill_totp
     | fill_text
     | click_button
     | open_url
@@ -25,6 +26,7 @@ stmt: click_submit_button
 click_submit_button : "clickSubmitButton" "(" [STRING] ")"
 fill_username       : "fillUsername" "(" [STRING] ")"
 fill_password       : "fillPassword" "(" [STRING] ")"
+fill_totp           : "fillTotp" "(" [STRING] ")"
 
 // Command with two string arguments: fillText("some xpath", "value")
 fill_text           : "fillText" "(" STRING "," STRING ")"
@@ -70,6 +72,10 @@ class Executor(Transformer):
     def fill_password(self, items):
         xpath = items[0] if items else None
         self._custom_login_methods.fill_password(xpath)
+
+    def fill_totp(self, items):
+        xpath = items[0] if items else None
+        self._custom_login_methods.fill_totp(xpath)
 
     def fill_text(self, items):
         xpath, value = items

@@ -104,3 +104,29 @@ def test_find_login_automatically(filename):
         assert (
             submit_button_element[0].get("test-id") == "submit-button"
         ), f"Found wrong submit button element for login {filename}"
+
+
+
+def _find(body: str):
+    return LoginFormFinder(MockDomInteractionDriver(f"<html><body>{body}</body></html>")).find_totp_field()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '<input autocomplete="one-time-code">',
+        '<input name="otp">',
+        '<input id="totp_code">',
+        '<input placeholder="Authentication code">',
+        '<input aria-label="2FA code">',
+        '<input type="text" name="twofa" id="twofa" maxlength="6" inputmode="numeric" placeholder="TOTP 2FA">',
+        '<input name="qrcode_confirm" autocomplete="one-time-code">',
+        '<input name="twofa">',
+    ],
+)
+def test_finds_totp_field(body):
+    assert _find(body) == "/html/body/input"
+
+
+def test_ignores_login_form():
+    assert _find('<input name="username"><input type="password" name="password">') is None

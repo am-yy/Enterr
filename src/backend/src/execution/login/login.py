@@ -18,12 +18,18 @@ def login(
     password: str,
     custom_login_script: str | None = None,
     screenshot_id: str | None = None,
+    totp_secret: str | None = None,
 ) -> Tuple[LoginStatusCode, CustomFailedDetailsMessage]:
     try:
         with DomInteractionDriver(url=url) as driver:
             try:
                 status = _execute_interaction(
-                    driver, custom_login_script, username, password
+                    driver,
+                    custom_login_script,
+                    username,
+                    password,
+                    success_url,
+                    totp_secret,
                 )
 
                 if status is not None:
@@ -66,7 +72,11 @@ def _execute_interaction(
     custom_login_script: str | None,
     username: str,
     password: str,
+    success_url: str,
+    totp_secret: str | None = None,
 ) -> Tuple[LoginStatusCode, CustomFailedDetailsMessage] | None:
+    default_script = custom_login_script is None
+    totp_on_login_form = False
     xpaths = None
     xpath_not_found_error = None
     if custom_login_script is None:
@@ -85,13 +95,60 @@ def _execute_interaction(
             driver.wait(5000)
         if xpath_not_found_error is not None:
             return xpath_not_found_error, None
+        # Some sites (e.g. Gazelle trackers) put an optional 2FA field on the login form itself.
+        if totp_secret and LoginFormFinder(driver=driver).find_totp_field():
+            totp_on_login_form = True
+            custom_login_script = """
+            fillUsername()
+            fillPassword()
+            fillTotp()
+            clickSubmitButton()
+            """
     else:
         xpaths = _find_elements(driver=driver)
     custom_login_seleniumbase = CustomLoginMethodsDriver(
-        driver=driver, x_paths=xpaths, username=username, password=password
+        driver=driver,
+        x_paths=xpaths,
+        username=username,
+        password=password,
+        totp_secret=totp_secret,
     )
     parser = CustomLoginScriptParser(custom_login_seleniumbase)
     exception = parser.execute(custom_login_script)
+    if exception is not None:
+        return exception.status, exception.message
+    if default_script and totp_secret and not totp_on_login_form:
+        return _execute_totp_step(driver, username, password, success_url, totp_secret)
+    return None
+
+
+def _execute_totp_step(
+    driver: DomInteractionInterface,
+    username: str,
+    password: str,
+    success_url: str,
+    totp_secret: str,
+) -> Tuple[LoginStatusCode, CustomFailedDetailsMessage] | None:
+    """
+    Default-script MFA: wait for a one-time-code field to appear after submit, fill it and submit.
+    No field appearing is not an error (the site may not ask for MFA); the success URL check decides.
+    """
+    for _ in range(TIMEOUT):
+        if compare_urls(driver.get_current_url(), success_url):
+            return None
+        if LoginFormFinder(driver=driver).find_totp_field() is not None:
+            break
+        driver.wait(1000)
+    else:
+        return None
+    methods = CustomLoginMethodsDriver(
+        driver=driver,
+        x_paths=_find_elements(driver=driver),
+        username=username,
+        password=password,
+        totp_secret=totp_secret,
+    )
+    exception = CustomLoginScriptParser(methods).execute("fillTotp()\nclickSubmitButton()")
     if exception is not None:
         return exception.status, exception.message
     return None

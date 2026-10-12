@@ -195,6 +195,7 @@ class Website(Base):
     username: Mapped[str] = mapped_column(nullable=False)
     password: Mapped[str] = mapped_column(nullable=False)
     custom_login_script: Mapped[Optional[str]] = mapped_column(nullable=True)
+    totp_secret: Mapped[Optional[str]] = mapped_column(nullable=True)
     added_at: Mapped[datetime] = mapped_column(nullable=False)
     take_screenshot: Mapped[bool] = mapped_column(nullable=False)
     paused: Mapped[bool] = mapped_column(nullable=False)
