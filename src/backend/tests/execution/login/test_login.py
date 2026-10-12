@@ -177,3 +177,15 @@ def test_fill_totp_without_secret(driver, form_finder):
     status, message = _login("fillTotp('//input')")
     assert status == LoginStatusCode.TEXT_FIELD_NOT_FOUND
     assert "No TOTP secret" in message
+
+
+def test_login_waits_for_page_change_before_opening_success_url(driver, form_finder):
+    urls = iter([URL, URL, URL, "https://example.com/redirected"])
+    driver.get_current_url.side_effect = lambda: next(urls, SUCCESS_URL)
+    order = []
+    driver.wait.side_effect = lambda ms: order.append("wait")
+    driver.open_url.side_effect = lambda url: order.append("open")
+
+    assert _login() == (LoginStatusCode.SUCCESS, None)
+
+    assert order.index("open") > 2 and order.count("wait") > 2

@@ -1,7 +1,12 @@
 import traceback
 from typing import Tuple
 from utils.utils import compare_urls
-from .constants import LoginStatusCode, CustomFailedDetailsMessage, TIMEOUT
+from .constants import (
+    LoginStatusCode,
+    CustomFailedDetailsMessage,
+    NAVIGATION_TIMEOUT,
+    TIMEOUT,
+)
 from .custom_login.custom_login_methods_driver import CustomLoginMethodsDriver
 from .custom_login.parser import CustomLoginScriptParser
 from execution.login.dom_interaction.interfaces.dom_interaction_interface import (
@@ -23,6 +28,7 @@ def login(
     try:
         with DomInteractionDriver(url=url) as driver:
             try:
+                url_before = driver.get_current_url()
                 status = _execute_interaction(
                     driver,
                     custom_login_script,
@@ -35,6 +41,8 @@ def login(
                 if status is not None:
                     driver.save_screenshot(screenshot_id)
                     return status
+
+                _wait_for_navigation(driver, url_before)
 
                 # Redirect to success url
                 driver.open_url(success_url)
@@ -65,6 +73,18 @@ def login(
     except Exception:
         traceback.print_exc()
         return LoginStatusCode.UNKNOWN_EXECUTION_ERROR, None
+
+
+def _wait_for_navigation(driver: DomInteractionInterface, url_before: str) -> None:
+    """
+    Let the submitted login finish before leaving the page. Navigating away right after the
+    click aborts a slow login request before the session cookie is set.
+    """
+    for _ in range(NAVIGATION_TIMEOUT):
+        if driver.get_current_url() != url_before:
+            break
+        driver.wait(1000)
+    driver.wait(1000)
 
 
 def _execute_interaction(
