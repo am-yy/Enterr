@@ -105,14 +105,18 @@ class EditWebsite(BaseModel):
             existing_website.take_screenshot = self.take_screenshot
         if self.paused is not None:
             existing_website.paused = self.paused
-        if self.expiration_interval_minutes is not None:
-            existing_website.expiration_interval = timedelta(
-                minutes=self.expiration_interval_minutes
+        # These three can be cleared with an explicit null, so only touch them when the
+        # request contains them (pause/resume sends just {"paused": ...}).
+        if "expiration_interval_minutes" in self.model_fields_set:
+            existing_website.expiration_interval = (
+                None
+                if self.expiration_interval_minutes is None
+                else timedelta(minutes=self.expiration_interval_minutes)
             )
-        else:
-            existing_website.expiration_interval = None
-        existing_website.custom_login_script = self.custom_login_script
-        existing_website.totp_secret = self.totp_secret
+        if "custom_login_script" in self.model_fields_set:
+            existing_website.custom_login_script = self.custom_login_script
+        if "totp_secret" in self.model_fields_set:
+            existing_website.totp_secret = self.totp_secret
         if self.action_interval is not None:
             existing_website.action_interval = self.action_interval.edit_existing_model(
                 existing_website.action_interval
