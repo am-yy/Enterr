@@ -30,5 +30,6 @@ export interface ChangeWebsite {
   paused?: boolean
   expiration_interval_minutes?: number | null
   custom_login_script?: string | null
+  totp_secret?: string | null
   action_interval?: ActionInterval | null
 }

@@ -27,6 +27,14 @@ class CustomLoginMethodsInterface(ABC):
         pass
 
     @abstractmethod
+    def fill_totp(self, xpath=None):
+        """
+        Fills the current TOTP code (from the website's TOTP secret) in the MFA field.
+        :param xpath: Optional xpath to reference text field, when none is set, the system tries to find it automatically.
+        """
+        pass
+
+    @abstractmethod
     def fill_text(self, xpath, value):
         """
         Fills a text field with a value.

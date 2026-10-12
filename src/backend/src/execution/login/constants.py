@@ -19,5 +19,7 @@ class LoginStatusCode(Enum):
 
 
 TIMEOUT = 30
+# Max seconds to wait for the page to change after submitting the login form.
+NAVIGATION_TIMEOUT = 10
 
 type CustomFailedDetailsMessage = str | None

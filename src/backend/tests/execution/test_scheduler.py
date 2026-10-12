@@ -132,6 +132,7 @@ def test_login_task_success(scheduler, data_access, get_website, mocker):
         password="secret",
         custom_login_script=None,
         screenshot_id=None,
+        totp_secret=None,
     )
     data_access.action_history_finish_execution.assert_called_once_with(
         action_history_id=42,

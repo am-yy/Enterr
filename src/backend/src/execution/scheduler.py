@@ -73,6 +73,7 @@ class Scheduler:
             password=password,
             custom_login_script=website.custom_login_script,
             screenshot_id=screenshot_id,
+            totp_secret=website.totp_secret,
         )
         executions_status = LoginStatusCode.SUCCESS
         failed_details = None

@@ -35,6 +35,22 @@ class LoginFormFinder:
             return None
         return XPaths(username=username_xpath, password=password_xpath, submit_button=submit_button_xpath)
 
+    def find_totp_field(self) -> XPath | None:
+        """
+        Returns xpath of the first visible one-time-code input, or None when the page has none.
+        Unlike the other finders this never falls back to an arbitrary input, so it is safe to poll for.
+        """
+        hint = re.compile(r"(?<![a-z])t?otp|2fa|two.?fa|mfa|one.?time|verification|authenticator|(security|auth\w*).?code", re.I)
+        for element in self._dom.xpath("//input"):
+            if element.get("type") in ("hidden", "password", "submit", "button", "checkbox", "radio"):
+                continue
+            attrs = [element.get(a) or "" for a in ("autocomplete", "name", "id", "placeholder", "aria-label")]
+            if attrs[0] == "one-time-code" or hint.search(" ".join(attrs[1:])):
+                xpath = element.getroottree().getpath(element)
+                if self._driver.is_element_visible(xpath):
+                    return XPath(xpath)
+        return None
+
     def _find_username_field(self) -> XPath | None:
         """
         Tries to find xpath of username field automatically.

@@ -23,6 +23,9 @@ class MockCustomLoginMethods(CustomLoginMethodsInterface):
     def fill_password(self, xpath=None):
         self.calls.append(("fill_password", xpath))
 
+    def fill_totp(self, xpath=None):
+        self.calls.append(("fill_totp", xpath))
+
     def fill_text(self, xpath, value):
         self.calls.append(("fill_text", xpath, value))
 
@@ -188,6 +191,9 @@ class TestCustomLoginScriptParser:
             def click_submit_button(self, xpath=None):
                 pass
 
+            def fill_totp(self, xpath=None):
+                pass
+
             def fill_text(self, xpath, value):
                 pass
 
@@ -273,4 +279,11 @@ class TestCustomLoginScriptParser:
             ("fill_username", "'"),
             ("fill_username", "'"),
             ("fill_username", '"'),
+        ]
+
+    def test_fill_totp(self, parser, mock_methods):
+        parser.execute("fillTotp()\nfillTotp('//input[@id=\"otp\"]')")
+        assert mock_methods.calls == [
+            ("fill_totp", None),
+            ("fill_totp", '//input[@id="otp"]'),
         ]

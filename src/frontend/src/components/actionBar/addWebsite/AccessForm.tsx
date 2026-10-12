@@ -51,6 +51,22 @@ export default function AccessForm(props: AccessFormProps) {
           />
         </Grid>
         <Grid size={{ xs: 12 }}>
+          <TextFieldForm
+            identifier="totp_secret"
+            variant="filled"
+            label="TOTP secret (optional)"
+            disabled={loading}
+            value={value.totp_secret ?? ''}
+            onChange={event =>
+              onChange?.({
+                ...value,
+                totp_secret: event.target.value,
+              })}
+            fullWidth
+            helperText="Base32 secret or otpauth:// URI. Fills the 2FA field automatically, or use fillTotp() in a custom script."
+          />
+        </Grid>
+        <Grid size={{ xs: 12 }}>
           <CustomLoginScriptForm value={value} onChange={onChange} loading={loading} />
         </Grid>
       </Grid>

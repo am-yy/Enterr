@@ -1,6 +1,6 @@
 from datetime import timedelta, datetime, timezone
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from dataAccess.database.database import Website
 from utils.utils import to_utc_time
 from endpoints.decorators.request_validator import (
@@ -12,7 +12,16 @@ from endpoints.models.action_interval_model import (
     GetActionInterval,
     EditActionInterval,
 )
+from utils.totp import is_valid_secret, normalize_secret
 from utils.utils import timedelta_to_parts
+
+
+def _validate_totp_secret(value: Optional[str]) -> Optional[str]:
+    if not value or not value.strip():
+        return None
+    if not is_valid_secret(value):
+        raise ValueError("totp_secret must be a base32 secret or otpauth:// URI")
+    return normalize_secret(value)
 
 
 class DateTime(BaseModel):
@@ -39,7 +48,10 @@ class AddWebsite(PostRequestBaseModel):
     paused: Optional[bool] = None
     expiration_interval_minutes: Optional[int] = None
     custom_login_script: Optional[str] = None
+    totp_secret: Optional[str] = None
     action_interval: AddActionInterval
+
+    _check_totp_secret = field_validator("totp_secret")(_validate_totp_secret)
 
     def to_sql_model(self) -> Website:
         expiration_interval = None
@@ -52,6 +64,7 @@ class AddWebsite(PostRequestBaseModel):
             username=self.username,
             password=self.password,
             custom_login_script=self.custom_login_script,
+            totp_secret=self.totp_secret,
             take_screenshot=self.take_screenshot,
             paused=self.paused if self.paused is not None else False,
             added_at=datetime.now(timezone.utc),
@@ -72,7 +85,10 @@ class EditWebsite(BaseModel):
     paused: Optional[bool] = None
     expiration_interval_minutes: Optional[int] = None
     custom_login_script: Optional[str] = None
+    totp_secret: Optional[str] = None
     action_interval: Optional[EditActionInterval] = None
+
+    _check_totp_secret = field_validator("totp_secret")(_validate_totp_secret)
 
     def edit_existing_model(self, existing_website: Website) -> Website:
         if self.url is not None:
@@ -89,13 +105,18 @@ class EditWebsite(BaseModel):
             existing_website.take_screenshot = self.take_screenshot
         if self.paused is not None:
             existing_website.paused = self.paused
-        if self.expiration_interval_minutes is not None:
-            existing_website.expiration_interval = timedelta(
-                minutes=self.expiration_interval_minutes
+        # These three can be cleared with an explicit null, so only touch them when the
+        # request contains them (pause/resume sends just {"paused": ...}).
+        if "expiration_interval_minutes" in self.model_fields_set:
+            existing_website.expiration_interval = (
+                None
+                if self.expiration_interval_minutes is None
+                else timedelta(minutes=self.expiration_interval_minutes)
             )
-        else:
-            existing_website.expiration_interval = None
-        existing_website.custom_login_script = self.custom_login_script
+        if "custom_login_script" in self.model_fields_set:
+            existing_website.custom_login_script = self.custom_login_script
+        if "totp_secret" in self.model_fields_set:
+            existing_website.totp_secret = self.totp_secret
         if self.action_interval is not None:
             existing_website.action_interval = self.action_interval.edit_existing_model(
                 existing_website.action_interval
@@ -122,6 +143,7 @@ class GetWebsite(GetRequestBaseModel):
     paused: bool
     expiration_interval_minutes: Optional[int] = None
     custom_login_script: Optional[str] = None
+    totp_secret: Optional[str] = None
     action_interval: Optional[GetActionInterval] = None
     next_schedule: Optional[datetime] = None
     last_login_attempt: Optional[datetime] = None
@@ -154,6 +176,7 @@ class GetWebsite(GetRequestBaseModel):
             paused=website.paused,
             expiration_interval_minutes=expiration_interval_minutes,
             custom_login_script=website.custom_login_script,
+            totp_secret=website.totp_secret,
             action_interval=(
                 GetActionInterval.from_sql_model(website.action_interval)
                 if website.action_interval

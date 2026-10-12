@@ -35,7 +35,10 @@ def form_finder(mocker):
     return finder.return_value
 
 
-def _login(custom_login_script=None):
+TOTP_SECRET = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+
+
+def _login(custom_login_script=None, totp_secret=None):
     return login(
         url=URL,
         success_url=SUCCESS_URL,
@@ -43,6 +46,7 @@ def _login(custom_login_script=None):
         password="secret",
         custom_login_script=custom_login_script,
         screenshot_id="screenshot-id",
+        totp_secret=totp_secret,
     )
 
 
@@ -122,3 +126,66 @@ def test_login_custom_script_button_not_found(driver, form_finder):
         'XPath "//missing" not found on page.',
     )
     driver.open_url.assert_not_called()
+
+
+@pytest.fixture(autouse=True)
+def no_totp_wait(mocker):
+    mocker.patch(
+        "execution.login.custom_login.custom_login_methods_driver.seconds_remaining",
+        return_value=30,
+    )
+
+
+def test_login_default_script_fills_totp_when_field_appears(driver, form_finder, mocker):
+    # No OTP field on the login form; one appears after the first submit.
+    mocker.patch("execution.login.login.compare_urls", side_effect=[False, True])
+    mocker.patch(
+        "execution.login.custom_login.custom_login_methods_driver.LoginFormFinder",
+        return_value=form_finder,
+    )
+    form_finder.find_totp_field.side_effect = [None, "//input[@id='otp']", "//input[@id='otp']"]
+
+    assert _login(totp_secret=TOTP_SECRET) == (LoginStatusCode.SUCCESS, None)
+
+    otp_fills = [c for c in driver.fill_text.call_args_list if c.args[0] == "//input[@id='otp']"]
+    assert len(otp_fills) == 1 and len(otp_fills[0].args[1]) == 6
+    assert driver.click_button.call_count == 2
+
+
+def test_login_default_script_no_mfa_field_is_not_an_error(driver, form_finder):
+    form_finder.find_totp_field.return_value = None
+
+    assert _login(totp_secret=TOTP_SECRET) == (LoginStatusCode.SUCCESS, None)
+
+    assert driver.click_button.call_count == 1
+
+
+def test_login_default_script_fills_totp_on_login_form(driver, form_finder, mocker):
+    form_finder.find_totp_field.return_value = "//input[@id='twofa']"
+    mocker.patch(
+        "execution.login.custom_login.custom_login_methods_driver.LoginFormFinder",
+        return_value=form_finder,
+    )
+
+    assert _login(totp_secret=TOTP_SECRET) == (LoginStatusCode.SUCCESS, None)
+
+    assert driver.click_button.call_count == 1
+    assert any(c.args[0] == "//input[@id='twofa']" for c in driver.fill_text.call_args_list)
+
+
+def test_fill_totp_without_secret(driver, form_finder):
+    status, message = _login("fillTotp('//input')")
+    assert status == LoginStatusCode.TEXT_FIELD_NOT_FOUND
+    assert "No TOTP secret" in message
+
+
+def test_login_waits_for_page_change_before_opening_success_url(driver, form_finder):
+    urls = iter([URL, URL, URL, "https://example.com/redirected"])
+    driver.get_current_url.side_effect = lambda: next(urls, SUCCESS_URL)
+    order = []
+    driver.wait.side_effect = lambda ms: order.append("wait")
+    driver.open_url.side_effect = lambda url: order.append("open")
+
+    assert _login() == (LoginStatusCode.SUCCESS, None)
+
+    assert order.index("open") > 2 and order.count("wait") > 2
