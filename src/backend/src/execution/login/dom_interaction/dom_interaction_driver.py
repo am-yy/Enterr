@@ -1,7 +1,14 @@
 import os
 
+import mycdp
 from seleniumbase import SB
 from execution.login.dom_interaction.interfaces.dom_interaction_interface import DomInteractionInterface
+
+# XewdyCaptcha (https://github.com/Xewdy444) renders a checkbox in a closed shadow root and
+# writes the solved token into a hidden "passage-token" field that the login form submits.
+XEWDY_PRESENT_JS = "!!document.querySelector('script[src*=\"xewdy.systems\"], [data-passage-container]')"
+XEWDY_TOKEN_JS = "(document.querySelector('#passage-token, [name=\"passage_token\"]') || {}).value || ''"
+XEWDY_TIMEOUT = 20
 
 
 class DomInteractionDriver(DomInteractionInterface):
@@ -47,6 +54,45 @@ class DomInteractionDriver(DomInteractionInterface):
 
     def solve_captcha(self):
         self._sb.uc_gui_click_captcha()
+        self._solve_xewdy_captcha()
+
+    def _solve_xewdy_captcha(self):
+        cdp = self._sb.cdp
+        if not cdp.evaluate(XEWDY_PRESENT_JS):
+            return
+        clicked = False
+        for _ in range(XEWDY_TIMEOUT):
+            if cdp.evaluate(XEWDY_TOKEN_JS):
+                return
+            if not clicked:
+                point = self._xewdy_checkbox_screen_point()
+                if point is not None:
+                    # A real OS click is required: CDP-dispatched mouse events get the challenge denied.
+                    cdp.gui_click_x_y(*point)
+                    clicked = True
+            self._sb.sleep(1)
+        # Failed or stuck: start a fresh challenge so the next call can try again.
+        cdp.evaluate("window.passage && window.passage.reset()")
+
+    def _xewdy_checkbox_screen_point(self) -> tuple[float, float] | None:
+        """Screen coordinates of the checkbox center, or None while it is not rendered yet."""
+        cdp = self._sb.cdp
+        run = cdp.loop.run_until_complete
+        document = run(cdp.page.send(mycdp.dom.get_document(depth=-1, pierce=True)))
+        checkbox = _find_node_by_class(document, "checkbox-box")
+        if checkbox is None:
+            return None
+        try:
+            run(cdp.page.send(mycdp.dom.scroll_into_view_if_needed(backend_node_id=checkbox.backend_node_id)))
+            quads = run(cdp.page.send(mycdp.dom.get_content_quads(backend_node_id=checkbox.backend_node_id)))
+        except Exception:
+            return None  # Not laid out yet
+        if not quads:
+            return None
+        quad = quads[0]
+        x, y = sum(quad[0::2]) / 4, sum(quad[1::2]) / 4  # viewport coordinates
+        window = cdp.get_window_rect()
+        return window["x"] + x, window["y"] + window["height"] - window["innerHeight"] + y
 
     def fill_text(self, xpath: str, value: str):
         self._sb.cdp.send_keys(xpath, value)
@@ -60,3 +106,14 @@ class DomInteractionDriver(DomInteractionInterface):
     def wait(self, ms: int):
         self._sb.sleep(ms / 1000)
 
+
+def _find_node_by_class(node, class_name: str):
+    """Depth-first search of a CDP DOM tree, including (closed) shadow roots."""
+    attributes = node.attributes or []
+    if class_name in dict(zip(attributes[::2], attributes[1::2])).get("class", "").split():
+        return node
+    for child in (node.shadow_roots or []) + (node.children or []):
+        found = _find_node_by_class(child, class_name)
+        if found is not None:
+            return found
+    return None

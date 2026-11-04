@@ -125,6 +125,8 @@ def _execute_interaction(
             clickSubmitButton()
             """
     else:
+        # Solve before the script runs so a token-based captcha is filled in before submit.
+        driver.solve_captcha()
         xpaths = _find_elements(driver=driver)
     custom_login_seleniumbase = CustomLoginMethodsDriver(
         driver=driver,

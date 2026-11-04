@@ -118,6 +118,15 @@ def test_login_custom_script(driver, form_finder):
     driver.click_button.assert_called_once_with("//button[@id='next']")
 
 
+def test_login_custom_script_solves_captcha_before_submit(driver, form_finder):
+    calls = []
+    driver.solve_captcha.side_effect = lambda: calls.append("solve_captcha")
+    driver.click_button.side_effect = lambda xpath: calls.append("click_button")
+
+    assert _login("clickSubmitButton()") == (LoginStatusCode.SUCCESS, None)
+    assert calls[:2] == ["solve_captcha", "click_button"]
+
+
 def test_login_custom_script_button_not_found(driver, form_finder):
     driver.click_button.side_effect = Exception("not found")
 
