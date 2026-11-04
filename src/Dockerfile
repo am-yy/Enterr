@@ -53,6 +53,27 @@ RUN apt-get update && \
     fonts-mononoki \
     fonts-lato
 
+#===========================================
+# Install Ubuntu desktop default fonts
+#===========================================
+# Fingerprinting checks (e.g. Pixelscan "masking detected") compare the installed fonts with a
+# stock Linux desktop. A bare container exposes ~14 fonts, which reads as a spoofed fingerprint.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    fonts-indic \
+    fonts-thai-tlwg \
+    fonts-kacst \
+    fonts-kacst-one \
+    fonts-noto-cjk \
+    fonts-sil-abyssinica \
+    fonts-sil-padauk \
+    fonts-tibetan-machine \
+    fonts-lklug-sinhala \
+    fonts-lao \
+    fonts-opensymbol \
+    fonts-noto-mono \
+    fonts-khmeros-core
+
 #============================
 # Install Linux Dependencies
 #============================

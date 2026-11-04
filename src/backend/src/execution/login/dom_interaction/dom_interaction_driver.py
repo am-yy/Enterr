@@ -1,4 +1,5 @@
 import os
+import sys
 
 import mycdp
 from seleniumbase import SB
@@ -10,20 +11,38 @@ XEWDY_PRESENT_JS = "!!document.querySelector('script[src*=\"xewdy.systems\"], [d
 XEWDY_TOKEN_JS = "(document.querySelector('#passage-token, [name=\"passage_token\"]') || {}).value || ''"
 XEWDY_TIMEOUT = 20
 
+# Without a GPU (Docker/Xvfb) Chrome disables WebGL entirely, which real desktop browsers never do.
+# Render it with Mesa's llvmpipe instead of SwiftShader, whose renderer string is a known bot tell.
+LINUX_WEBGL_ARGS = "--use-gl=angle,--use-angle=gl,--ignore-gpu-blocklist"
+
 
 class DomInteractionDriver(DomInteractionInterface):
 
     def __enter__(self):
-        self._sb_instance = SB(uc=True, headed=True, window_size="1920,953")
+        chromium_arg = LINUX_WEBGL_ARGS if sys.platform.startswith("linux") else None
+        self._sb_instance = SB(uc=True, headed=True, window_size="1920,953", chromium_arg=chromium_arg)
         self._sb = self._sb_instance.__enter__()
 
-        self._sb.activate_cdp_mode(self._url)
+        self._sb.activate_cdp_mode("about:blank")
+        self._reset_notification_permission()
+        self._sb.cdp.open(self._url)
         self._sb.uc_gui_handle_captcha()
         return self
 
     def __exit__(self, exc_type, exc, tb):
         self._sb_instance.__exit__(exc_type, exc, tb)
         return False
+
+    def _reset_notification_permission(self):
+        """
+        SeleniumBase launches Chrome with --deny-permission-prompts, so Notification.permission reads
+        "denied" on every site, a classic automation tell. Restore Chrome's default "prompt" state.
+        """
+        cdp = self._sb.cdp
+        cdp.loop.run_until_complete(cdp.page.send(mycdp.browser.set_permission(
+            permission=mycdp.browser.PermissionDescriptor(name="notifications"),
+            setting=mycdp.browser.PermissionSetting.PROMPT,
+        )))
 
     def disconnect_driver(self):
         self._sb.reconnect()
